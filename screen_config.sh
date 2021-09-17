@@ -55,6 +55,11 @@ function validate_date {
   month=$(echo $1 | cut -d/ -f2)
   year=$(echo $1 | cut -d/ -f3)
   rest=$(echo $1 | cut -d/ -f4)
+
+echo day = $day
+echo month = $month
+echo year = $year
+
   if [[ $rest != "" ]]
   then
     echo You complete fuck up.
@@ -70,15 +75,15 @@ function validate_date {
 
   if (( 10#${month} >= 01 && 10#${month} <= 12 ))
   then
-    if [[ 10#${#month} -eq 2 ]]
+    if [[ ${#month} -eq 2 ]]
     then
       month_check=1
     fi
   fi
 
-  if [[ 10#${month} == 01 || 10#${month} == 03 || 10#${month} == 05 || 10#${month} == 07 || 10#${month} == 08 || 10#${month} == 10 || 10#${month} == 12 ]]
+  if [[ ${month} == 01 || ${month} == 03 || ${month} == 05 || ${month} == 07 || 10#${month} == 08 || ${month} == 10 || ${month} == 12 ]]
   then
-    if (( $day >= 01 && $day <= 31 ))
+    if (( 10#${day} >= 01 && 10#${day} <= 31 ))
     then
       day_check=1
     fi
@@ -130,7 +135,7 @@ function get_date {
       read -p "Please enter the $1 date (dd/mm/yyyy): " getdate
     fi
 
-    if [[ $getdate == "" ]]
+    if [[ $getdate == "" && $1 == "start" ]]
     then
       getdate=$(date +"%d/%m/%Y")
       echo $getdate > ${HOME}/.working/${1}date
@@ -341,6 +346,7 @@ function delete_schedule {
   echo "Deleting a schedule"
   echo ""
   show_schedules
+  size=$(get_schedule_array_length)
   echo ""
   until false
   do
@@ -350,6 +356,12 @@ function delete_schedule {
     if [[ $delete_row == "" ]]
     then
       echo "A value must be entered"
+    elif [[ $size == 1 ]]
+    then
+      echo ""
+      echo "Cannot delete - At least one schdule must exist"
+      sleep 3
+      break
     elif (( $delete_row >= 1 && $delete_row <= $size ))
     then
       echo ""
