@@ -3,9 +3,9 @@
 declare -a schedule_array
 declare -a temp_array
 
-file=~/Desktop/config.json
+file=$(pwd)/config.json
 new_file=$HOME/.working/new_file.json
-new_json=~/Desktop/temp_config.json
+new_json=$(pwd)/temp_config.json
 
 function working_directory {
   if [[ ! -d $HOME/.working ]]
@@ -70,7 +70,7 @@ function validate_date {
 
   if (( 10#${month} >= 01 && 10#${month} <= 12 ))
   then
-    if [[ ${#month} -eq 2 ]]
+    if [[ 10#${#month} -eq 2 ]]
     then
       month_check=1
     fi
@@ -316,7 +316,7 @@ function confirm_addition {
     elif [[ $response == n ]]
     then
       echo "Not adding schedule"
-      exit
+      break
     fi
   done
 }
