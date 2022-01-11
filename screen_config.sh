@@ -647,21 +647,22 @@ do
  read opt
  case $opt in
    1) echo "************ Configured Schedules *************";
-     show_schedules;
-     echo "";
-     read enterKey;;
+      show_schedules;
+      echo "";
+      read enterKey;;
    2) echo "*********** Add a Schedule ***********";
-     create_schedule ;;
+      create_schedule ;;
    3) echo "*********** Delete a Schedule ***********";
-     delete_schedule ;;
+      delete_schedule ;;
    4) echo "*********** Edit a Schedule ***********";   
-     edit_schedule ;;
+      edit_schedule ;;
    5) echo "*********** Write Schedule ***********";  
-     write_schedule ;;
+      write_schedule ;;
    6) echo "Bye $USER";
-     exit;;
+      rm -f $HOME/.working
+      exit;;
    *) echo "Invaild option. Please select an above option";
-     echo "Press [enter] key to continue. . .";
-     read enterKey;;
+      echo "Press [enter] key to continue. . .";
+      read enterKey;;
 esac
 done
