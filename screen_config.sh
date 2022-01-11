@@ -2,11 +2,18 @@
 
 declare -a schedule_array
 declare -a temp_array
+declare -a screen_array
+declare -a variation_array
 
+jq_path=/usr/local/bin
 file=$(pwd)/config.json
 new_file=$HOME/.working/new_file.json
 new_json=$(pwd)/temp_config.json
+new_config_file=~/Desktop/new_config.json
 
+# Functions
+
+# Create working directory
 function working_directory {
   if [[ ! -d $HOME/.working ]]
   then
@@ -16,10 +23,17 @@ function working_directory {
   fi
 }
 
+# Get number of schedules in config file
 function get_number_of_schedules {
   echo $(grep -c variation $file)
 }
 
+# Get the length of the schedule array
+function get_schedule_array_length {
+  echo ${#schedule_array[@]}
+}
+
+# Iterate through config file and build out schedules to display
 function build_schedule_array {
   for i in $( seq 1 $(get_number_of_schedules))
   do
@@ -35,14 +49,74 @@ function build_schedule_array {
   done
 }
 
-function show_schedules {
+# Rebuild array we can write it out
+function rebuild_array {
+  # Create new array without any missing gaps created by the delete
+  # remove the line to delete
+  unset schedule_array[$1]
+  # empty the temporary array so we don't create huge exponential arrays
+  temp_array=()
+
   index=1
   for i in "${schedule_array[@]}"
   do
-    echo Schedule $index - $i
-#    echo $i
+    if [[ $i != "" ]]
+    then
+      temp_array[$index]+=$i
+      index=$(($index+1))
+    fi
+  done
+
+  # empty the proper array
+  schedule_array=()
+
+  # copy temp_array back to schdule array
+  index=1
+  for i in "${temp_array[@]}"
+  do
+    schedule_array[$index]+=$i
     index=$(($index+1))
   done
+
+  # healthy paranoia
+  temp_array=()
+}
+
+# Write out the schedule and make it look pretty too
+function schedule_writer {
+
+  header='{
+  "mosaicVmSid": 1846,
+  "mosaicSchedule": ['
+  
+  footer=$(cat $file | sed -e"s/^{//" | tr -d '\n' | sed -e"s/.*\"noEventSlateUrl/\"noEventSlateUrl/")
+  
+  echo $header > $new_file
+  size=$(get_schedule_array_length)
+  counter=0
+
+  for i in "${schedule_array[@]}"
+  do
+    echo "{ \"start\": { \"date\": \"$(echo $i | cut -d, -f1 | cut -d' ' -f1)\", \"time\": \"$(echo $i | cut -d, -f1 | cut -d' ' -f2)\" }," >> $new_file
+    echo "\"end\": { \"date\": \"$(echo $i | cut -d, -f2 | cut -d' ' -f2)\", \"time\": \"$(echo $i | cut -d, -f2 | cut -d' ' -f3)\" }," >> $new_file
+    echo "\"type\": $(echo $i | cut -d, -f3)," >> $new_file
+    echo "\"variation\": \"$(echo $i | cut -d, -f4)\"" >> $new_file
+    counter=$(($counter+1))
+    if [[ $counter == $size ]]
+    then
+      echo '} ],' >> $new_file
+    else
+      echo '},' >> $new_file
+    fi
+  done
+
+  echo $footer >> $new_file
+  cat $new_file | ${jq_path}/jq . > $new_config_file
+  rm $new_file
+
+
+  echo "Schedule written!"
+  sleep 3
 }
 
 function validate_date {
@@ -55,10 +129,6 @@ function validate_date {
   month=$(echo $1 | cut -d/ -f2)
   year=$(echo $1 | cut -d/ -f3)
   rest=$(echo $1 | cut -d/ -f4)
-
-echo day = $day
-echo month = $month
-echo year = $year
 
   if [[ $rest != "" ]]
   then
@@ -73,21 +143,21 @@ echo year = $year
     fi
   fi
 
-  if (( 10#${month} >= 01 && 10#${month} <= 12 ))
-  then
-    if [[ ${#month} -eq 2 ]]
-    then
-      month_check=1
-    fi
-  fi
+   if (( 10#${month} >= 01 && 10#${month} <= 12 ))
+   then
+     if [[ ${#month} -eq 2 ]]
+     then
+       month_check=1
+     fi
+   fi
 
-  if [[ ${month} == 01 || ${month} == 03 || ${month} == 05 || ${month} == 07 || 10#${month} == 08 || ${month} == 10 || ${month} == 12 ]]
-  then
-    if (( 10#${day} >= 01 && 10#${day} <= 31 ))
-    then
-      day_check=1
-    fi
-  fi
+   if [[ ${month} == 01 || ${month} == 03 || ${month} == 05 || ${month} == 07 || ${month} == 08 || ${month} == 10 || ${month} == 12 ]]
+   then
+     if (( 10#${day} >= 01 && 10#${day} <= 31 ))
+     then
+       day_check=1
+     fi
+   fi
 
   if [[ $month == 04 || $month == 06 || $month == 09 || $month == 11 ]]
   then
@@ -158,7 +228,7 @@ function validate_time {
     echo You complete fuck up.
   fi
 
-  if (( $hour >= 00 && $hour <= 23 ))
+  if (( 10#${hour} >= 00 && 10#${hour} <= 23 ))
   then
     if [[ ${#hour} -eq 2 ]]
     then
@@ -166,7 +236,7 @@ function validate_time {
     fi
   fi
 
-  if (( $minute >= 00 && $minute <= 59 ))
+  if (( 10#${minute} >= 00 && 10#${minute} <= 59 ))
   then
     if [[ ${#minute} -eq 2 ]]
     then
@@ -204,38 +274,6 @@ function get_time {
   done
 }
 
-function rebuild_array {
-  # Create new array without any missing gaps created by the delete
-  # remove the line to delete
-  unset schedule_array[$1]
-  # empty the temporary array so we don't create huge exponential arrays
-  temp_array=()
-
-  index=1
-  for i in "${schedule_array[@]}"
-  do
-    if [[ $i != "" ]]
-    then
-      temp_array[$index]+=$i
-      index=$(($index+1))
-    fi
-  done
-
-  # empty the proper array
-  schedule_array=()
-
-  # copy temp_array back to schdule array
-  index=1
-  for i in "${temp_array[@]}"
-  do
-    schedule_array[$index]+=$i
-    index=$(($index+1))
-  done
-
-  # healthy paranoia
-  temp_array=()
-}
-
 function get_start_date {
   get_date start
   startdate=$getdate
@@ -266,13 +304,24 @@ function add_schedule {
 }
 
 function get_screen {
+  screen_array=$(cat $file | ${jq_path}/jq '.mosaicVariations | keys' | grep '"' | cut -d\" -f2 | while read list
+  do
+    echo -n "$list "
+  done)
+
+  echo -n "Possible screen values are: "
+  for i in "${screen_array[@]}"
+  do
+    echo $i
+  done
+
+  echo ""
   until false
   do
     read -p  "Please enter a screen number: " screen
-    
     if [[ $screen != "" ]]
     then
-      if (( $screen >= 1 && $screen <= 9 ))
+      if [[ " ${screen_array[*]} " =~ " ${screen} " ]]
       then
         echo screen number = $screen
         echo $screen > ${HOME}/.working/screen
@@ -283,6 +332,19 @@ function get_screen {
 }
 
 function get_variation {
+  echo screen for variation = $screen
+  variation_array=$(cat config.json | ${jq_path}/jq ".mosaicVariations[\"${screen}\"] | keys" | grep '"' | cut -d\" -f2 | while read list
+  do
+    echo -n "$list "
+  done)
+
+  echo -n "Possible screen variations are: "
+  for i in "${variation_array[@]}"
+  do
+    echo $i
+  done
+
+  echo ""
   until false
   do
     read -p "Please enter a variation: " var
@@ -290,7 +352,7 @@ function get_variation {
     if [[ $var != "" ]]
     then
       variation=$(echo $var | tr '[:lower:]' '[:upper:]')
-      if [[ $variation == [A-Z] ]]
+      if [[ " ${variation_array[*]} " =~ " ${variation} " ]]
       then 
         echo variation = $variation
         echo $variation > ${HOME}/.working/variation
@@ -326,22 +388,34 @@ function confirm_addition {
   done
 }
 
+# Show the currently configured schedules.
+function show_schedules {
+  index=1
+  for i in "${schedule_array[@]}"
+  do
+    echo Schedule $index - $i
+#    echo $i
+    index=$(($index+1))
+  done
+  echo ""
+  echo "Press any key to continue."
+}
+
 function create_schedule {
   echo "Creating a schedule"
   echo ""
+  
   show_schedules
   echo ""
   get_start_date
   get_end_date
   get_screen
   get_variation
+
   confirm_addition
 }
 
-function get_schedule_array_length {
-  echo ${#schedule_array[@]}
-}
-
+# Delete an existing schedule
 function delete_schedule {
   echo "Deleting a schedule"
   echo ""
@@ -351,12 +425,9 @@ function delete_schedule {
   until false
   do
     size=$(get_schedule_array_length)
-    read -p "Select a schedule to delete (or r to return to main menu): " delete_row
+    read -p "Select a schedule to delete (or any key to return to main menu): " delete_row
     
-    if [[ $delete_row == "" ]]
-    then
-      echo "A value must be entered"
-    elif [[ $size == 1 ]]
+    if [[ $size == 1 ]]
     then
       echo ""
       echo "Cannot delete - At least one schdule must exist"
@@ -370,7 +441,7 @@ function delete_schedule {
       rebuild_array $delete_row
       show_schedules
       echo ""
-    elif [[ $delete_row == "r" ]]
+    elif [[ $delete_row != [0-9] ]]
     then
       break
     else
@@ -397,7 +468,7 @@ function confirm_edit {
   echo ${schedule_array[$1]}
   echo ""
   echo "To: "
-  echo $startdate, $enddate, $screen, $variation
+  echo $startdate $starttime, $enddate $endtime, $screen, $variation
   line="$startdate $starttime, $enddate $endtime, $screen, $variation"
 
   until false
@@ -414,49 +485,39 @@ function confirm_edit {
     elif [[ $response == n ]]
     then
       echo "Not adding schedule"
-      exit
-    fi
-  done
-}
-
-function edit_date {
-  change_date=$1
-  change_time=$2
-  start_or_end=$3
-  echo $change_date > ${HOME}/.working/${start_or_end}date
-  echo $change_time > ${HOME}/.working/${start_or_end}time
-
-  until false
-  do
-    change_date=$(cat ${HOME}/.working/${start_or_end}date)
-    read -p "Edit $start_or_end date of $change_date [y/n] " answer
-    response=$(echo $answer | tr '[:upper:]' '[:lower:]')
-    if [[ $response != "" ]]
-    then
-      if [[ $response == y ]]
-      then
-        get_date $start_or_end
-      fi
-      if [[ $response == n ]]
-      then
-        break
-      fi
-    elif [[ $response == n ]]
-    then
       break
     fi
   done
+}
+
+function schedule_editor {
+  echo Editing schdule: ${schedule_array[$schedule]}
+
+  startdate=$(echo ${schedule_array[$schedule]} | cut -d, -f1)
+  echo $startdate | awk '{print $1}' > ${HOME}/.working/startdate
+  echo $startdate | awk '{print $2}' > ${HOME}/.working/starttime
+        
+  enddate=$(echo ${schedule_array[$schedule]} | cut -d, -f2 | sed -e"s/^ //" )
+  echo $enddate | awk '{print $1}' > ${HOME}/.working/enddate
+  echo $enddate | awk '{print $2}' > ${HOME}/.working/endtime
+        
+  screen=$(echo ${schedule_array[$schedule]} | cut -d, -f3 | tr -d ' ')
+  echo $screen > ${HOME}/.working/screen
+        
+  variation=$(echo ${schedule_array[$schedule]} | cut -d, -f4 | tr -d ' ')
+  echo $variation > ${HOME}/.working/variation
 
   until false
   do
-    change_time=$(cat ${HOME}/.working/${start_or_end}time)
-    read -p "Edit $start_or_end time of $change_time [y/n] " answer
+    read -p "Edit start date of $startdate [y/n] " answer
     response=$(echo $answer | tr '[:upper:]' '[:lower:]')
     if [[ $response != "" ]]
     then
       if [[ $response == y ]]
       then
-        get_time $start_or_end
+        get_date start
+        get_time start
+        break
       fi
       if [[ $response == n ]]
       then
@@ -464,162 +525,80 @@ function edit_date {
       fi
     fi
   done
-}
-
-function edit_schedule {
-  length=$(get_schedule_array_length)
-  new_date=""
 
   until false
   do
-    echo ""
-    echo "Select a schedule to edit (r to return)"
-    echo ""
-    show_schedules
-    echo ""
-    read -p "Schedule Number: " schedule
-    if [[ $schedule != "" ]]
+    read -p "Edit end date of $enddate [y/n] " answer
+    response=$(echo $answer | tr '[:upper:]' '[:lower:]')
+    if [[ $response != "" ]]
     then
-      if [[ $schedule == r ]]
+      if [[ $response == y ]]
+      then
+        get_date end
+        get_time end
+        break
+      fi
+      if [[ $response == n ]]
       then
         break
-      elif (( $schedule >= 1 && $schedule <= $length ))
-      then
-        echo Editing schdule: ${schedule_array[$schedule]}
-        
-        startdate=$(echo ${schedule_array[$schedule]} | cut -d, -f1)
-        echo $startdate | awk '{print $1}' > ${HOME}/.working/startdate
-        echo $startdate | awk '{print $2}' > ${HOME}/.working/starttime
-        
-        enddate=$(echo ${schedule_array[$schedule]} | cut -d, -f2 | sed -e"s/^ //" )
-        echo $enddate
-        echo $enddate | awk '{print $1}' > ${HOME}/.working/enddate
-        echo $enddate | awk '{print $2}' > ${HOME}/.working/endtime
-        
-        screen=$(echo ${schedule_array[$schedule]} | cut -d, -f3 | tr -d ' ')
-        echo $screen > ${HOME}/.working/screen
-        
-        variation=$(echo ${schedule_array[$schedule]} | cut -d, -f4 | tr -d ' ')
-        echo $variation > ${HOME}/.working/variation
-
-        until false
-        do
-          read -p "Edit start date of $startdate [y/n] " answer
-          response=$(echo $answer | tr '[:upper:]' '[:lower:]')
-          if [[ $response != "" ]]
-          then
-            if [[ $response == y ]]
-            then
-              edit_date $startdate start
-            fi
-            if [[ $response == n ]]
-            then
-              break
-            fi
-          fi
-        done
-
-        until false
-        do
-          read -p "Edit end date of $enddate [y/n] " answer
-          response=$(echo $answer | tr '[:upper:]' '[:lower:]')
-          if [[ $response != "" ]]
-          then
-            if [[ $response == y ]]
-            then
-              edit_date $enddate end
-            fi
-            if [[ $response == n ]]
-            then
-              break
-            fi
-          fi
-        done
-
-        until false
-        do
-          screen=$(cat ${HOME}/.working/screen)
-          read -p "Edit screen value of $screen [y/n] " answer
-          response=$(echo $answer | tr '[:upper:]' '[:lower:]')
-          if [[ $response != "" ]]
-          then
-            if [[ $response == y ]]
-            then
-              get_screen $screen
-            fi
-            if [[ $response == n ]]
-            then
-              break
-            fi
-          fi
-        done
-        
-        until false
-        do
-          variation=$(cat ${HOME}/.working/variation)
-          read -p "Edit variation value of $variation [y/n] " answer
-          response=$(echo $answer | tr '[:upper:]' '[:lower:]')
-          if [[ $response != "" ]]
-          then
-            if [[ $response == y ]]
-            then
-              get_variation $variation
-            fi
-            if [[ $response == n ]]
-            then
-              break
-            fi
-          fi
-        done
-
       fi
     fi
-
-    confirm_edit $schedule
   done
-}
 
-function schedule_writer {
-  header='{
-  "mosaicVmSid": 1846,
-  "mosaicSchedule": ['
-  
-  footer=$(cat $file | sed -e"s/^{//" | tr -d '\n' | sed -e"s/.*\"noEventSlateUrl/\"noEventSlateUrl/")
-  
-  echo $header > $new_file
-  size=$(get_schedule_array_length)
-
-  for i in $( seq 1 $(get_number_of_schedules))
+  until false
   do
-    start_date=$(grep -A2 start $file | grep date | head -$i | tail -1 | cut -d\" -f4)
-    start_time=$(grep -A2 start $file | grep time | head -$i | tail -1 | cut -d\" -f4)
-    start=$(echo $start_date " " $start_time)
-    end_date=$(grep -A2 end $file | grep date | head -$i | tail -1 | cut -d\" -f4)
-    end_time=$(grep -A2 end $file | grep time | head -$i | tail -1 | cut -d\" -f4)
-    end=$(echo $end_date " " $end_time)
-    type=$(grep type $file | head -$i | tail -1 | awk '{print $2}' | tr -d ',')
-    variation=$(grep variation $file | head -$i | tail -1 | cut -d\" -f4)
-    echo "{ \"start\": { \"date\": \"$start_date\", \"time\": \"$start_time\" }," >> $new_file
-    echo "\"end\": { \"date\": \"$end_date\", \"time\": \"$end_time\" }," >> $new_file
-    echo "\"type\": $type," >> $new_file
-    echo "\"variation\": \"$variation\"" >> $new_file
-    if [[ $i == $size ]]
+    screen=$(cat ${HOME}/.working/screen)
+    read -p "Edit screen value of $screen [y/n] " answer
+    response=$(echo $answer | tr '[:upper:]' '[:lower:]')
+    if [[ $response != "" ]]
     then
-      echo '} ],' >> $new_file
-    else
-      echo '},' >> $new_file
+      if [[ $response == y ]]
+      then
+        get_screen $screen
+        get_variation $variation
+        break
+      fi
+      if [[ $response == n ]]
+      then
+        break
+      fi
     fi
   done
 
-  echo $footer >> $new_file
-  cat $new_file | jq . > new_config.json
-  rm $new_file
-
-
-  echo "Schedule written"
-  sleep 3
+  confirm_edit $schedule
+  echo "New schedule:"
+  show_schedules
+  echo ""
 }
 
+# Edit an existing schedule
+function edit_schedule {
+  size=$(get_schedule_array_length)
+
+  show_schedules
+
+  until false
+  do
+    read -p "Select a schedule to edit ('l' to relist or 'r' to return to main menu): " schedule
+    echo $schedule
+    if [[ $schedule == [0-9] ]] && [[ $schedule > 0 ]] && [[ $schedule < $(($size+1)) ]]
+    then
+      clear
+      schedule_editor $schedule
+    elif [[ $schedule == 'r' ]]
+    then
+      break
+    elif [[ $schedule == 'l' ]]
+    then
+      show_schedules
+    elif [[ $schedule == [0-9] ]]
+    then
+      echo "Invalid schedule selection"
+    fi
+  done
+}
+
+# Write out the current schedule
 function write_schedule {
   until false
   do
