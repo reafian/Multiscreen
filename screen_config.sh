@@ -9,7 +9,9 @@ jq_path=/usr/local/bin
 file=$(pwd)/config.json
 new_file=$HOME/.working/new_file.json
 new_json=$(pwd)/temp_config.json
-new_config_file=~/Desktop/new_config.json
+new_config_file=$(pwd)/new_config.json
+content_config=$(pwd)/content.cfg
+publish_path=/var/www/html/publishConfig/htmlApps/btmosaic/staging
 
 # Functions
 
@@ -53,19 +55,45 @@ function build_schedule_array {
 function rebuild_array {
   # Create new array without any missing gaps created by the delete
   # remove the line to delete
-  unset schedule_array[$1]
+  if [[ $1 != "" ]]
+  then
+    unset schedule_array[$1]
+  fi
   # empty the temporary array so we don't create huge exponential arrays
   temp_array=()
+  # Because the date sequence matters we have to sort the dates
+  # Given that they're all dd/mm/yyyy format we can't do that as things stand
+  # We have to convert the dates to yyyymmddhhmmss for the sorting to work.
+  index=0
 
-  index=1
-  for i in "${schedule_array[@]}"
+  while read list
   do
-    if [[ $i != "" ]]
-    then
-      temp_array[$index]+=$i
-      index=$(($index+1))
-    fi
-  done
+    line=$(echo $list | cut -d" " -f2-)
+    startdate=$(echo $line | cut -d" " -f1 | cut -d\[ -f2)
+    starttime=$(echo $line | cut -d" " -f2 | cut -d, -f1)
+    enddate=$(echo $line | cut -d, -f2 | cut -d" " -f2)
+    endtime=$(echo $line | cut -d, -f2 | cut -d" " -f3)
+    screen=$(echo $line | cut -d, -f3 | tr -d " ")
+    variation=$(echo $line | cut -d, -f4 | cut -d\] -f1 | tr -d " ")
+    new_line="$startdate $starttime, $enddate $endtime, $screen, $variation"
+    temp_array[index]+=$new_line
+    index=$(($index+1))
+  done < <(for i in "${schedule_array[@]}"
+  do
+    echo $temp_array[$i] | while read line
+    do
+      day=$(echo $line | cut -d/ -f1 | cut -d[ -f2)
+      month=$(echo $line | cut -d/ -f2)
+      year=$(echo $line | cut -d/ -f3 | cut -d" " -f1)
+      hour=$(echo $line | cut -d" " -f2 | cut -d: -f1)
+      minute=$(echo $line | cut -d: -f2- | cut -c1-2)
+      echo $year$month$day$hour$minute $line
+    done
+  done | sort)
+
+
+echo printing array
+echo "${temp_array[@]}"
 
   # empty the proper array
   schedule_array=()
@@ -80,6 +108,17 @@ function rebuild_array {
 
   # healthy paranoia
   temp_array=()
+}
+
+function publish_new_config {
+  user=$(grep user $content_config | cut -d= -f2)
+  echo $user
+  grep "server" $content_config | cut -d= -f2 | while read list
+  do
+    echo "Publishing to $list"
+    scp -q $new_config_file ${user}@${list}:${publish_path}/config.json < /dev/null
+  done
+  mv $new_config_file $file
 }
 
 # Write out the schedule and make it look pretty too
@@ -114,6 +153,8 @@ function schedule_writer {
   cat $new_file | ${jq_path}/jq . > $new_config_file
   rm $new_file
 
+  echo "Publishing new configuration."
+  publish_new_config
 
   echo "Schedule written!"
   sleep 3
@@ -132,7 +173,7 @@ function validate_date {
 
   if [[ $rest != "" ]]
   then
-    echo You complete fuck up.
+    echo "Incorrect date".
   fi
 
   if (( $year >= $year_now && $year <= $year_ahead ))
@@ -225,7 +266,7 @@ function validate_time {
   rest=$(echo $1 | cut -d: -f3)
   if [[ $rest != "" ]]
   then
-    echo You complete fuck up.
+    echo "Incorrect time."
   fi
 
   if (( 10#${hour} >= 00 && 10#${hour} <= 23 ))
@@ -293,13 +334,10 @@ function get_end_date {
 }
 
 function add_schedule {
-  echo adding schedule
   line="$startdate $starttime, $enddate $endtime, $screen, $variation"
   echo ""
   schedule_array+=$line
   rebuild_array
-# schedule_array=("${schedule_array[@]}")
-#  show_schedules
   break
 }
 
@@ -390,11 +428,11 @@ function confirm_addition {
 
 # Show the currently configured schedules.
 function show_schedules {
+  clear
   index=1
   for i in "${schedule_array[@]}"
   do
-    echo Schedule $index - $i
-#    echo $i
+    echo Schedule $index - $i | tr -d '\r'
     index=$(($index+1))
   done
   echo ""
@@ -640,7 +678,7 @@ do
  echo "2. Add schedule"
  echo "3. Delete schedule"
  echo "4. Edit schedule"
- echo "5. Write schedule"
+ echo "5. Publish schedule"
  echo "6. Exit"
  echo ""
  echo -n "Please enter option [1 - 6]: "
@@ -659,7 +697,7 @@ do
    5) echo "*********** Write Schedule ***********";  
       write_schedule ;;
    6) echo "Bye $USER";
-      rm -f $HOME/.working
+      rm -rf $HOME/.working
       exit;;
    *) echo "Invaild option. Please select an above option";
       echo "Press [enter] key to continue. . .";
