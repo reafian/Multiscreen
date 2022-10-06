@@ -116,7 +116,7 @@ function publish_new_config {
   grep "server" $content_config | cut -d= -f2 | while read list
   do
     echo "Publishing to $list"
-    scp -q $new_config_file ${user}@${list}:${publish_path}/config.json < /dev/null
+    echo scp -q $new_config_file ${user}@${list}:${publish_path}/config.json < /dev/null
   done
   mv $new_config_file $file
 }
@@ -139,7 +139,7 @@ function schedule_writer {
     echo "{ \"start\": { \"date\": \"$(echo $i | cut -d, -f1 | cut -d' ' -f1)\", \"time\": \"$(echo $i | cut -d, -f1 | cut -d' ' -f2)\" }," >> $new_file
     echo "\"end\": { \"date\": \"$(echo $i | cut -d, -f2 | cut -d' ' -f2)\", \"time\": \"$(echo $i | cut -d, -f2 | cut -d' ' -f3)\" }," >> $new_file
     echo "\"type\": $(echo $i | cut -d, -f3)," >> $new_file
-    echo "\"variation\": \"$(echo $i | cut -d, -f4)\"" >> $new_file
+    echo "\"variation\": \"$(echo $i | cut -d, -f4 | tr -d " ")\"" >> $new_file
     counter=$(($counter+1))
     if [[ $counter == $size ]]
     then
