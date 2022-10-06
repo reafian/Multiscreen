@@ -11,7 +11,15 @@ new_file=$HOME/.working/new_file.json
 new_json=$(pwd)/temp_config.json
 new_config_file=$(pwd)/new_config.json
 content_config=$(pwd)/content.cfg
+archive=$(pwd)/archive
 publish_path=/var/www/html/publishConfig/htmlApps/btmosaic/staging
+
+if [[ $(uname -a | awk '{print $1}') == "Darwin" ]]
+then
+  jq_path=/usr/local/bin
+else
+  jq_path=/home/content/screen
+fi
 
 # Functions
 
@@ -33,6 +41,20 @@ function get_number_of_schedules {
 # Get the length of the schedule array
 function get_schedule_array_length {
   echo ${#schedule_array[@]}
+}
+
+function fetch_file {
+  user=$(grep user $content_config | cut -d= -f2)
+  server=$(grep "server" $content_config | cut -d= -f2 | head -1)
+  echo "Trying to fetch config file from $publish_path on $server"
+  scp -q ${user}@${server}:${publish_path}/config.json $file < /dev/null
+}
+
+function check_for_file {
+  if [[ ! -s $file ]]
+  then
+    fetch_file
+  fi
 }
 
 # Iterate through config file and build out schedules to display
@@ -112,13 +134,11 @@ echo "${temp_array[@]}"
 
 function publish_new_config {
   user=$(grep user $content_config | cut -d= -f2)
-  echo $user
   grep "server" $content_config | cut -d= -f2 | while read list
   do
     echo "Publishing to $list"
-    echo scp -q $new_config_file ${user}@${list}:${publish_path}/config.json < /dev/null
+    scp -q $new_config_file ${user}@${list}:${publish_path}/config.json < /dev/null
   done
-  mv $new_config_file $file
 }
 
 # Write out the schedule and make it look pretty too
@@ -664,6 +684,7 @@ function write_schedule {
 }
 
 # Start of actually doing stuff
+check_for_file
 working_directory
 build_schedule_array
 
